@@ -1,0 +1,70 @@
+#!/bin/bash
+(
+	#The purpose of this script is to list out all the open branches that have been merged in a git repository 
+	#To use it navigate to the directory containing this script and type in the terminal:
+	#bash list-merged-branches <path to git repository> "User name"
+
+	function findValueForRegex() {
+		if [[ $1 =~ $2 ]]; then
+			echo "${BASH_REMATCH[1]}"
+		else
+			echo "No value found"
+		fi
+	}
+	if [[ ! -d $1 ]]; then
+		printf "🚨Please provide a valid filepath to a git repository🚨\n%s cannot be found\n" "$1"
+		exit 
+	fi
+
+	cd "$1" && git fetch &&
+	branches=$(git branch -r --merged)
+	printf "%-50.50s | %-20s | %-24s \n" "BRANCH NAME" "LAST COMMIT AUTHOR" "DATE"
+	printf "___________________________________________________|______________________|__________________________ \n"
+
+	declare -a authorsnames
+	declare -a authorscounts
+
+	for branchname in $branches
+	do
+		excluidednames="develop|HEAD|master|->"
+		if [[ ! $branchname =~ $excluidednames ]]; then
+			branchlog=$(git log -n 1 "$branchname")
+			
+			authorregex="Author: *(([A-z]| )*)"
+			author="$(findValueForRegex "$branchlog" "$authorregex")"
+			if [[ $2 && ! $author =~ $2 ]]; then
+				#skip past authors we aren't interested in if one has been defined by the user
+				continue
+			fi
+
+			for i in "${!authorsnames[@]}"; do
+   				if [[ "${authorsnames[$i]}" = "$author" ]]; then
+       				indexofauthor="${i}";
+   				fi
+			done
+
+			if [[ ${authorsnames[$indexofauthor]} == "$author" ]]; then
+				((authorscounts[indexofauthor]++))
+			else
+				authorsnames+=("$author")
+				authorscounts+=(1)
+			fi
+			
+			dateregex="Date: *(( |[A-z]|[0-9]|:)*)"
+			lastCommitDate="$(findValueForRegex "$branchlog" "$dateregex")"
+
+			printf "%-50.50s | %-20s | %-24s \n" "$branchname" "$author" "$lastCommitDate"
+		fi
+	done
+
+	if [[ ! ${#authorsnames} -eq 0 ]]; then
+		printf "\n\n%-50.50s | %-20s \n" "LAST AUTHOR" "NUMBER OF OPEN BRANCHES"
+		printf "___________________________________________________|______________________ \n"
+		for i in "${!authorsnames[@]}"; do
+			printf "%-50.50s | %-20s \n" "${authorsnames[i]}" "${authorscounts[i]}"
+		done
+	else
+		echo "No authors found."
+	fi
+	
+)
